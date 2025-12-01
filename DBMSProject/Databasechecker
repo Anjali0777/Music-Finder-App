@@ -1,0 +1,155 @@
+import pandas as pd
+import sqlite3
+
+# ------------------------------
+# Step 1: Load CSV
+# ------------------------------
+df = pd.read_csv("dataset.csv")  # replace with your CSV file path
+
+# Drop the 'Unnamed: 0' column if it exists
+if 'Unnamed: 0' in df.columns:
+    df = df.drop(columns=['Unnamed: 0'])
+
+# Fill missing artist names with "Unknown Artist" (optional)
+df['artists'].fillna("Unknown Artist", inplace=True)
+
+# ------------------------------
+# Step 2: Connect to SQLite
+# ------------------------------
+conn = sqlite3.connect("music.db")
+cursor = conn.cursor()
+
+# ------------------------------
+# Step 3: Create Tables
+# ------------------------------
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Artist (
+    ArtistID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name TEXT UNIQUE
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Album (
+    AlbumID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name TEXT UNIQUE
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Track (
+    TrackID TEXT PRIMARY KEY,
+    Name TEXT,
+    AlbumID INTEGER,
+    DurationMs INTEGER,
+    Explicit INTEGER,
+    Popularity INTEGER,
+    Danceability REAL,
+    Energy REAL,
+    Key INTEGER,
+    Loudness REAL,
+    Mode INTEGER,
+    Speechiness REAL,
+    Acousticness REAL,
+    Instrumentalness REAL,
+    Liveness REAL,
+    Valence REAL,
+    Tempo REAL,
+    TimeSignature INTEGER,
+    Genre TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS ArtistTrack (
+    ArtistID INTEGER,
+    TrackID TEXT,
+    PRIMARY KEY (ArtistID, TrackID)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS ArtistAlbum (
+    ArtistID INTEGER,
+    AlbumID INTEGER,
+    PRIMARY KEY (ArtistID, AlbumID)
+)
+""")
+
+# ------------------------------
+# Step 4: Insert Artists
+# ------------------------------
+artist_names = df['artists'].unique()
+artist_df = pd.DataFrame(artist_names, columns=['Name'])
+artist_df.to_sql('Artist', conn, if_exists='replace', index_label='ArtistID')
+
+# ------------------------------
+# Step 5: Insert Albums
+# ------------------------------
+album_names = df['album_name'].unique()
+album_df = pd.DataFrame(album_names, columns=['Name'])
+album_df.to_sql('Album', conn, if_exists='replace', index_label='AlbumID')
+
+# ------------------------------
+# Step 6: Map names to IDs
+# ------------------------------
+album_map = pd.read_sql("SELECT * FROM Album", conn).set_index('Name')['AlbumID'].to_dict()
+artist_map = pd.read_sql("SELECT * FROM Artist", conn).set_index('Name')['ArtistID'].to_dict()
+
+# ------------------------------
+# Step 7: Prepare Track table
+# ------------------------------
+track_df = df.copy()
+track_df['AlbumID'] = track_df['album_name'].map(album_map)
+
+# Rename columns to match Track table
+track_df.rename(columns={
+    'track_id': 'TrackID',
+    'track_name': 'Name',
+    'duration_ms': 'DurationMs',
+    'explicit': 'Explicit',
+    'popularity': 'Popularity',
+    'danceability': 'Danceability',
+    'energy': 'Energy',
+    'key': 'Key',
+    'loudness': 'Loudness',
+    'mode': 'Mode',
+    'speechiness': 'Speechiness',
+    'acousticness': 'Acousticness',
+    'instrumentalness': 'Instrumentalness',
+    'liveness': 'Liveness',
+    'valence': 'Valence',
+    'tempo': 'Tempo',
+    'time_signature': 'TimeSignature',
+    'track_genre': 'Genre'
+}, inplace=True)
+
+# Insert into Track
+track_df[['TrackID','Name','AlbumID','DurationMs','Explicit','Popularity','Danceability',
+          'Energy','Key','Loudness','Mode','Speechiness','Acousticness','Instrumentalness',
+          'Liveness','Valence','Tempo','TimeSignature','Genre']].to_sql('Track', conn, if_exists='replace', index=False)
+
+# ------------------------------
+# Step 8: Insert ArtistTrack & ArtistAlbum relationships
+# ------------------------------
+artist_track_list = []
+artist_album_list = []
+
+for idx, row in df.iterrows():
+    if pd.isna(row['artists']) or pd.isna(row['track_id']) or pd.isna(row['album_name']):
+        continue  # skip rows with missing critical info
+    aid = artist_map[row['artists']]
+    tid = row['track_id']
+    albumid = album_map[row['album_name']]
+    artist_track_list.append((aid, tid))
+    artist_album_list.append((aid, albumid))
+
+cursor.executemany("INSERT OR IGNORE INTO ArtistTrack (ArtistID, TrackID) VALUES (?, ?)", artist_track_list)
+cursor.executemany("INSERT OR IGNORE INTO ArtistAlbum (ArtistID, AlbumID) VALUES (?, ?)", artist_album_list)
+
+# ------------------------------
+# Step 9: Finish
+# ------------------------------
+conn.commit()
+conn.close()
+print("CSV loaded and normalized into SQLite database successfully!")
