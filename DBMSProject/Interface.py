@@ -33,6 +33,7 @@ class MusicDBApp:
         tab_control = ttk.Notebook(root)
 
         # Tabs
+        self.tab_create_playlist = ttk.Frame(tab_control)
         self.tab_insert_artist = ttk.Frame(tab_control)
         self.tab_search_album = ttk.Frame(tab_control)
         self.tab_playlist_view = ttk.Frame(tab_control)
@@ -47,6 +48,7 @@ class MusicDBApp:
         self.tab_delete_track = ttk.Frame(tab_control)
 
         tabs = [
+            ("Create Playlist", self.tab_create_playlist),
             ("Insert Artist", self.tab_insert_artist),
             ("Search Album", self.tab_search_album),
             ("Playlist View", self.tab_playlist_view),
@@ -65,6 +67,7 @@ class MusicDBApp:
             tab_control.add(frame, text=title)
 
         tab_control.pack(expand=1, fill="both")
+        self.create_create_playlist_tab()
         self.create_insert_artist_tab()
         self.create_search_album_tab()
         self.create_playlist_view_tab()
@@ -82,7 +85,94 @@ class MusicDBApp:
     # Tab Implementations
     # ----------------------------
 
-    # Tab 1: Insert Artist
+    # Tab 1: Create Playlist
+    def create_create_playlist_tab(self):
+        # Create Playlist
+        ttk.Label(self.tab_create_playlist, text="Playlist Name: ").grid(row=0, column=0, padx=5, pady=5)
+        self.new_playlist_entry = ttk.Entry(self.tab_create_playlist, width=50)
+        self.new_playlist_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(self.tab_create_playlist, text="Created Date (YYYY-MM-DD): ").grid(row=1, column=0, padx=5, pady=5)
+        self.new_playlist_date_entry = ttk.Entry(self.tab_create_playlist, width=50)
+        self.new_playlist_date_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Button(
+            self.tab_create_playlist,
+            text="Create Playlist",
+            command=self.create_playlist
+        ).grid(row=2, column=1, pady=10)
+
+        # Add Tracks to Playlist
+        ttk.Label(self.tab_create_playlist, text="Add Tracks to Playlist").grid(row=3, column=0, columnspan=2, pady=10)
+
+        ttk.Label(self.tab_create_playlist, text="Select Playlist: ").grid(row=4, column=0, padx=5, pady=5)
+        self.playlist_selector = ttk.Combobox(self.tab_create_playlist, width=40)
+        self.playlist_selector.grid(row=4, column=1, padx=5, pady=5)
+
+        ttk.Label(self.tab_create_playlist, text="Select Track: ").grid(row=5, column=0, padx=5, pady=5)
+        self.track_selector = ttk.Combobox(self.tab_create_playlist, width=40)
+        self.track_selector.grid(row=5, column=1, padx=5, pady=5)
+
+        ttk.Button(self.tab_create_playlist, text="Add Track to Playlist", command=self.add_track_to_playlist).grid(row=6, column=1, pady=10)
+
+        self.refresh_playlist_dropdown()
+        self.refresh_track_dropdown()
+
+    def refresh_playlist_dropdown(self):
+        playlists = execute_query("SELECT Name FROM Playlist", fetch=True)
+        names = [p[0] for p in playlists] if playlists else []
+        self.playlist_selector["values"] = names
+
+    def refresh_track_dropdown(self):
+        tracks = execute_query("SELECT Name FROM Track", fetch=True)
+        names = [t[0] for t in tracks] if tracks else []
+        self.track_selector["values"] = names
+
+    def create_playlist(self):
+        pname = self.new_playlist_entry.get().strip()
+        pdate = self.new_playlist_date_entry.get().strip()
+
+        if not pname:
+            messagebox.showwarning("Input Error", "Please enter playlist name")
+            return
+
+        if not pdate:
+            import datetime
+            pdate = str(datetime.date.today())
+
+        execute_query(
+            "INSERT INTO Playlist (Name, CreatedDate) VALUES (?, ?)",
+            (pname, pdate)
+        )
+        messagebox.showinfo("Success", f"Playlist '{pname}' created successfully")
+        self.refresh_playlist_dropdown()
+
+    def add_track_to_playlist(self):
+        playlist_name = self.playlist_selector.get()
+        track_name = self.track_selector.get()
+
+        if not playlist_name or not track_name:
+            messagebox.showwarning("Input Error", "Please select playlist and track.")
+            return
+
+        playlist_id = execute_query(
+            "SELECT PlaylistID FROM Playlist WHERE Name=?",
+            (playlist_name,), fetch=True
+        )[0][0]
+
+        track_id = execute_query(
+            "SELECT TrackID FROM Track WHERE Name=?",
+            (track_name,), fetch=True
+        )[0][0]
+
+        execute_query("INSERT OR IGNORE INTO TrackPlaylist (PlaylistiD, TrackID) VALUES (?, ?)",
+                        (playlist_id, track_id)
+                      )
+
+        messagebox.showinfo("Success", f"Added '{track_name}' to playlist '{playlist_name}'.")
+
+
+    # Tab 2: Insert Artist
     def create_insert_artist_tab(self):
         ttk.Label(self.tab_insert_artist, text="Artist Name:").grid(row=0, column=0, padx=5, pady=5)
         self.artist_name_entry = ttk.Entry(self.tab_insert_artist, width=50)
@@ -115,7 +205,7 @@ class MusicDBApp:
 
         messagebox.showinfo("Success", f"Inserted artist '{artist_name}' with album '{album_name}'.")
 
-    # Tab 2: Search Album by AlbumID
+    # Tab 3: Search Album by AlbumID
     def create_search_album_tab(self):
         ttk.Label(self.tab_search_album, text="Album ID:").grid(row=0, column=0, padx=5, pady=5)
         self.album_id_entry = ttk.Entry(self.tab_search_album, width=30)
@@ -136,11 +226,11 @@ class MusicDBApp:
         else:
             self.album_result.config(text="Album not found.")
 
-    # Tab 3: Playlist View (List all Tracks in Playlist)
+    # Tab 4: Playlist View (List all Tracks in Playlist)
     def create_playlist_view_tab(self):
-        ttk.Label(self.tab_playlist_view, text="Playlist ID:").grid(row=0, column=0, padx=5, pady=5)
-        self.playlist_id_entry = ttk.Entry(self.tab_playlist_view, width=30)
-        self.playlist_id_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(self.tab_playlist_view, text="Playlist Name:").grid(row=0, column=0, padx=5, pady=5)
+        self.playlist_name_entry = ttk.Entry(self.tab_playlist_view, width=30)
+        self.playlist_name_entry.grid(row=0, column=1, padx=5, pady=5)
 
         ttk.Button(self.tab_playlist_view, text="Show Tracks", command=self.show_playlist_tracks).grid(row=1, column=1,
                                                                                                        pady=10)
@@ -148,17 +238,17 @@ class MusicDBApp:
         self.playlist_tracks_text.grid(row=2, column=0, columnspan=2, pady=10)
 
     def show_playlist_tracks(self):
-        pid = self.playlist_id_entry.get().strip()
-        if not pid:
-            messagebox.showwarning("Input Error", "Please enter Playlist ID.")
+        pname = self.playlist_name_entry.get().strip()
+        if not pname:
+            messagebox.showwarning("Input Error", "Please enter Playlist Name.")
             return
         query = """
         SELECT Track.Name 
         FROM Track
-        JOIN TrackPlaylist ON Track.TrackID = TrackPlaylist.TrackID
-        WHERE TrackPlaylist.PlaylistID = ?
+        JOIN TrackPlaylist ON Track.TrackID = TrackPlaylist.TrackID JOIN Playlist ON TrackPlaylist.PlaylistID = Playlist.PlaylistID 
+        WHERE Playlist.Name = ?
         """
-        results = execute_query(query, (pid,), fetch=True)
+        results = execute_query(query, (pname,), fetch=True)
         self.playlist_tracks_text.delete("1.0", tk.END)
         if results:
             for t in results:
@@ -166,11 +256,11 @@ class MusicDBApp:
         else:
             self.playlist_tracks_text.insert(tk.END, "No tracks found in this playlist.")
 
-    # Tab 4: Artist from TrackID
+    # Tab 5: Artist from TrackID
     def create_artist_from_track_tab(self):
-        ttk.Label(self.tab_artist_from_track, text="Track ID:").grid(row=0, column=0, padx=5, pady=5)
-        self.track_id_entry = ttk.Entry(self.tab_artist_from_track, width=30)
-        self.track_id_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(self.tab_artist_from_track, text="Track Name:").grid(row=0, column=0, padx=5, pady=5)
+        self.track_name_entry = ttk.Entry(self.tab_artist_from_track, width=30)
+        self.track_name_entry.grid(row=0, column=1, padx=5, pady=5)
         ttk.Button(self.tab_artist_from_track, text="Find Artist", command=self.find_artist_from_track).grid(row=1,
                                                                                                              column=1,
                                                                                                              pady=10)
@@ -178,23 +268,24 @@ class MusicDBApp:
         self.artist_result_label.grid(row=2, column=0, columnspan=2, pady=10)
 
     def find_artist_from_track(self):
-        tid = self.track_id_entry.get().strip()
-        if not tid:
-            messagebox.showwarning("Input Error", "Please enter Track ID.")
+        tname = self.track_name_entry.get().strip()
+        if not tname:
+            messagebox.showwarning("Input Error", "Please enter Track Name.")
             return
         query = """
         SELECT Artist.Name 
         FROM Artist
         JOIN ArtistTrack ON Artist.ArtistID = ArtistTrack.ArtistID
-        WHERE ArtistTrack.TrackID = ?
+        JOIN Track ON ArtistTrack.TrackID = Track.TrackID
+        WHERE Track.Name = ?
         """
-        result = execute_query(query, (tid,), fetch=True)
+        result = execute_query(query, (tname,), fetch=True)
         if result:
             self.artist_result_label.config(text=f"Artist: {result[0][0]}")
         else:
             self.artist_result_label.config(text="Artist not found.")
 
-    # Tab 5: Tracks per Genre (Stats)
+    # Tab 6: Tracks per Genre (Stats)
     def create_track_stats_tab(self):
         ttk.Button(self.tab_track_stats, text="Show Tracks per Genre", command=self.show_tracks_per_genre).pack(pady=10)
         self.genre_text = tk.Text(self.tab_track_stats, width=80, height=25)
@@ -207,7 +298,7 @@ class MusicDBApp:
         for genre, count in results:
             self.genre_text.insert(tk.END, f"{genre}: {count}\n")
 
-    # Tab 6: Artists with Album & Track
+    # Tab 7: Artists with Album & Track
     def create_artist_album_track_tab(self):
         ttk.Button(self.tab_artist_album_track, text="Show Artists w/ Album & Track",
                    command=self.show_artists_album_track).pack(pady=10)
@@ -226,7 +317,7 @@ class MusicDBApp:
         for r in results:
             self.artist_album_track_text.insert(tk.END, f"{r[0]}\n")
 
-    # Tab 7: Playlists by CreatedDate
+    # Tab 8: Playlists by CreatedDate
     def create_playlist_by_date_tab(self):
         ttk.Label(self.tab_playlist_by_date, text="Created After (YYYY-MM-DD):").grid(row=0, column=0, padx=5, pady=5)
         self.created_date_entry = ttk.Entry(self.tab_playlist_by_date, width=30)
@@ -245,7 +336,7 @@ class MusicDBApp:
         for name, created in results:
             self.playlist_date_text.insert(tk.END, f"{name} ({created})\n")
 
-    # Tab 8: Artist with Most Tracks
+    # Tab 9: Artist with Most Tracks
     def create_top_artist_tab(self):
         ttk.Button(self.tab_top_artist, text="Show Artist with Most Tracks", command=self.show_top_artist).pack(pady=10)
         self.top_artist_text = tk.Text(self.tab_top_artist, width=80, height=25)
@@ -253,13 +344,13 @@ class MusicDBApp:
 
     def show_top_artist(self):
         query = """
-        SELECT Name FROM Artist
-        WHERE ArtistID = (
-            SELECT ArtistID FROM ArtistTrack
+        SELECT Name, TrackCount FROM Artist a JOIN
+        (
+            SELECT ArtistID, COUNT(TrackID) AS TrackCount FROM ArtistTrack
             GROUP BY ArtistID
-            ORDER BY COUNT(TrackID) DESC
+            ORDER BY TrackCount DESC
             LIMIT 1
-        )
+        ) s ON a.ArtistID = s.ArtistID
         """
         result = execute_query(query, fetch=True)
         self.top_artist_text.delete("1.0", tk.END)
@@ -268,7 +359,7 @@ class MusicDBApp:
         else:
             self.top_artist_text.insert(tk.END, "No data found.")
 
-    # Tab 9: Duplicate Tracks
+    # Tab 10: Duplicate Tracks
     def create_duplicate_tracks_tab(self):
         ttk.Button(self.tab_duplicate_tracks, text="Find Duplicate Tracks", command=self.show_duplicate_tracks).pack(
             pady=10)
@@ -277,9 +368,9 @@ class MusicDBApp:
 
     def show_duplicate_tracks(self):
         query = """
-        SELECT t1.Name, t1.DurationMs
+        SELECT t1.TrackID, t1.Name
         FROM Track t1
-        JOIN Track t2 ON t1.Name = t2.Name AND t1.DurationMs = t2.DurationMs AND t1.TrackID != t2.TrackID
+        JOIN Track t2 ON t1.Name = t2.Name AND t1.DurationMs = t2.DurationMs AND t1.TrackID <> t2.TrackID
         GROUP BY t1.Name, t1.DurationMs
         """
         results = execute_query(query, fetch=True)
@@ -287,27 +378,47 @@ class MusicDBApp:
         for name, duration in results:
             self.duplicate_text.insert(tk.END, f"{name} ({duration} ms)\n")
 
-    # Tab 10: Nested Query Artist (Tracks not in playlist)
+    # Tab 11: Nested Query Artist (Tracks not in playlist)
     def create_nested_query_tab(self):
-        ttk.Button(self.tab_nested_query, text="Find Artists w/ Tracks Not in Playlist",
-                   command=self.show_nested_artists).pack(pady=10)
+        ttk.Label(self.tab_nested_query, text="Genre:").grid(row=0, column=0, padx=5, pady=5)
+        self.nested_query_entry = ttk.Entry(self.tab_nested_query, width=30)
+        self.nested_query_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Button(self.tab_nested_query, text="Find Artists w/ Tracks of entered genre Not in Playlist", command=self.show_nested_artists).grid(row=1, column=1, pady=10)
+
         self.nested_text = tk.Text(self.tab_nested_query, width=80, height=25)
-        self.nested_text.pack(pady=10)
+        self.nested_text.grid(row=2, column=1, pady=10)
 
     def show_nested_artists(self):
+        gname = self.nested_query_entry.get()
+        if not gname:
+            messagebox.showwarning("Input Error", "Please enter Genre")
+            return
         query = """
-        SELECT DISTINCT a.Name
+        SELECT DISTINCT a.Name, t.Name
         FROM Artist a
         JOIN ArtistTrack at ON a.ArtistID = at.ArtistID
         JOIN Track t ON at.TrackID = t.TrackID
-        WHERE t.Genre != 'something' AND t.TrackID NOT IN (SELECT TrackID FROM TrackPlaylist)
+        WHERE t.Genre = ? AND t.TrackID NOT IN (SELECT TrackID FROM TrackPlaylist)
+        ORDER BY a.name, t.name
         """
-        results = execute_query(query, fetch=True)
-        self.nested_text.delete("1.0", tk.END)
-        for r in results:
-            self.nested_text.insert(tk.END, f"{r[0]}\n")
+        results = execute_query(query, (gname,), fetch=True)
 
-    # Tab 11: Average Track Duration
+        artists = {}
+
+        for artist, track in results:
+            if artist not in artists:
+                artists[artist] = []
+            artists[artist].append(track)
+
+        self.nested_text.delete("1.0", tk.END)
+        for artist, tracks in artists.items():
+            self.nested_text.insert(tk.END, f"{artist}:\n")
+            for track in tracks:
+                self.nested_text.insert(tk.END, f"  - {track}\n")
+            self.nested_text.insert(tk.END, "\n")
+
+    # Tab 12: Average Track Duration
     def create_avg_duration_tab(self):
         ttk.Button(self.tab_avg_duration, text="Show Artists Above Avg Duration", command=self.show_avg_duration).pack(
             pady=10)
@@ -316,19 +427,23 @@ class MusicDBApp:
 
     def show_avg_duration(self):
         query = """
-        SELECT Artist.Name
+        SELECT Artist.Name, AVG(Track.DurationMs) AS AvgDuration
         FROM Artist
         JOIN ArtistTrack ON Artist.ArtistID = ArtistTrack.ArtistID
         JOIN Track ON ArtistTrack.TrackID = Track.TrackID
         GROUP BY Artist.ArtistID
-        HAVING AVG(Track.DurationMs) > (SELECT AVG(DurationMs) FROM Track)
+        HAVING AvgDuration > (SELECT AVG(DurationMs) FROM Track)
         """
         results = execute_query(query, fetch=True)
         self.avg_text.delete("1.0", tk.END)
-        for r in results:
-            self.avg_text.insert(tk.END, f"{r[0]}\n")
 
-    # Tab 12: Delete Track
+        for name, avg_duration in results:
+            minutes = int(avg_duration // 60000)
+            seconds = int((avg_duration % 60000) // 1000)
+
+            self.avg_text.insert(tk.END, f"{name} - Average Duration: {minutes}:{seconds:02d}\n")
+
+    # Tab 13: Delete Track
     def create_delete_track_tab(self):
         ttk.Label(self.tab_delete_track, text="Track ID:").grid(row=0, column=0, padx=5, pady=5)
         self.del_track_entry = ttk.Entry(self.tab_delete_track, width=30)
