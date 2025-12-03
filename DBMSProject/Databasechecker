@@ -11,7 +11,7 @@ if 'Unnamed: 0' in df.columns:
     df = df.drop(columns=['Unnamed: 0'])
 
 # Fill missing artist names with "Unknown Artist" (optional)
-df['artists'].fillna("Unknown Artist", inplace=True)
+df.fillna({"artists": "Unknown Artist"}, inplace=True)
 
 # ------------------------------
 # Step 2: Connect to SQLite
@@ -61,6 +61,15 @@ CREATE TABLE IF NOT EXISTS Track (
 """)
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS Playlist (
+      PlaylistID INTEGER PRIMARY KEY AUTOINCREMENT,
+      Name TEXT,
+      CreatedDate DATE,
+      OwnerName TEXT
+)
+""")
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS ArtistTrack (
     ArtistID INTEGER,
     TrackID TEXT,
@@ -73,6 +82,14 @@ CREATE TABLE IF NOT EXISTS ArtistAlbum (
     ArtistID INTEGER,
     AlbumID INTEGER,
     PRIMARY KEY (ArtistID, AlbumID)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS TrackPlaylist (
+    PlaylistID INTEGER,
+    TrackID TEXT,
+    PRIMARY KEY (PlaylistID, TrackID)
 )
 """)
 
