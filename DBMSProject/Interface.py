@@ -165,7 +165,7 @@ class MusicDBApp:
             (track_name,), fetch=True
         )[0][0]
 
-        execute_query("INSERT OR IGNORE INTO TrackPlaylist (PlaylistiD, TrackID) VALUES (?, ?)",
+        execute_query("INSERT OR IGNORE INTO TrackPlaylist (PlaylistID, TrackID) VALUES (?, ?)",
                         (playlist_id, track_id)
                       )
 
@@ -468,3 +468,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = MusicDBApp(root)
     root.mainloop()
+
