@@ -209,7 +209,7 @@ class MusicDBApp:
         else:
             self.playlist_tracks_text.insert(tk.END, "No tracks found in this playlist.")
 
-    # Tab 5: Artist from TrackID
+    # Tab 5: Artist from TrackName
     def create_artist_from_track_tab(self):
         ttk.Label(self.tab_artist_from_track, text="Track Name:").grid(row=0, column=0, padx=5, pady=5)
         self.track_name_entry = ttk.Entry(self.tab_artist_from_track, width=30)
